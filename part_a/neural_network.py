@@ -1,3 +1,5 @@
+import matplotlib.pyplot as plt
+
 from utils import *
 from torch.autograd import Variable
 
@@ -65,19 +67,10 @@ class AutoEncoder(nn.Module):
         :param inputs: user vector.
         :return: user vector.
         """
-
-        #####################################################################
-        # TODO:                                                             #
-        # Implement the function as described in the docstring.             #
-        # Use sigmoid activations for f and g.                              #
-        #####################################################################
         out = self.g(inputs)
         out = torch.sigmoid(out)
         out = self.h(out)
         out = torch.sigmoid(out)
-        #####################################################################
-        #                       END OF YOUR CODE                            #
-        #####################################################################
         return out
 
 
@@ -94,8 +87,6 @@ def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch):
     :param num_epoch: int
     :return: None
     """
-    # TODO: Add a regularizer to the cost function.
-
     # Tell PyTorch you are training the model.
     model.train()
 
@@ -103,6 +94,8 @@ def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch):
     optimizer = optim.SGD(model.parameters(), lr=lr)
     num_student = train_data.shape[0]
 
+    training_loss = []
+    validation_accuracies = []
     for epoch in range(0, num_epoch):
         train_loss = 0.
 
@@ -117,18 +110,20 @@ def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch):
             nan_mask = np.isnan(train_data[user_id].unsqueeze(0).numpy())
             target[0][nan_mask] = output[0][nan_mask]
 
-            loss = torch.sum((output - target) ** 2.)
+            loss = torch.sum((output - target) ** 2.) + lamb * model.\
+                get_weight_norm() / 2
             loss.backward()
 
             train_loss += loss.item()
             optimizer.step()
 
         valid_acc = evaluate(model, zero_train_data, valid_data)
+
+        training_loss.append(train_loss)
+        validation_accuracies.append(valid_acc)
         print("Epoch: {} \tTraining Cost: {:.6f}\t "
               "Valid Acc: {}".format(epoch, train_loss, valid_acc))
-    #####################################################################
-    #                       END OF YOUR CODE                            #
-    #####################################################################
+    return training_loss, validation_accuracies
 
 
 def evaluate(model, train_data, valid_data):
@@ -158,28 +153,90 @@ def evaluate(model, train_data, valid_data):
 
 
 def main():
+    """
+    Train a variety of models with different learning rates and different number
+    of neurons in the hidden layer. Plot the validation accuracies in plots.
+    """
     zero_train_matrix, train_matrix, valid_data, test_data = load_data()
 
-    #####################################################################
-    # TODO:                                                             #
-    # Try out 5 different k and select the best k using the             #
-    # validation set.                                                   #
-    #####################################################################
-    # Set model hyperparameters.
-    k = None
-    model = None
+    for i in [0.1, 0.01, 0.001]:
+        for k in [10, 50, 100, 200, 500]:
+            # Set model hyperparameters.
+            model = AutoEncoder(1774, k)
+            # Set optimization hyperparameters.
+            lr = i
+            num_epoch = 200
+            lamb = 0
 
-    # Set optimization hyperparameters.
-    lr = None
-    num_epoch = None
-    lamb = None
+            _, validation_accuracies = train(model, lr, lamb, train_matrix,
+                                             zero_train_matrix, valid_data,
+                                             num_epoch)
+            indices = [i for i in range(num_epoch)]
+            plt.scatter(indices, validation_accuracies, label="k={}".format(k),
+                        alpha=0.7)
+        plt.xlabel("Epoch")
+        plt.ylabel("Validation accuracy")
+        plt.title("Validation accuracy progression with lr {} for different "
+                  "number of neurons".format(lr))
+        plt.legend(loc="lower right")
+        plt.show()
 
-    train(model, lr, lamb, train_matrix, zero_train_matrix,
-          valid_data, num_epoch)
-    #####################################################################
-    #                       END OF YOUR CODE                            #
-    #####################################################################
+
+def plot_and_report(k, lamb, lr, num_epoch):
+    """
+    Plot the training loss curve and the validation curve for a fully specified
+    model in a duo axis plot. Report the final testing accuracy of the model.
+    """
+    zero_train_matrix, train_matrix, valid_data, test_data = load_data()
+    indices = [i for i in range(num_epoch)]
+    model = AutoEncoder(1774, k)
+    training_loss, validation_accuracies = train(model, lr, lamb, train_matrix,
+                                                 zero_train_matrix, valid_data,
+                                                 num_epoch)
+    fig, ax1 = plt.subplots()
+    ax2 = ax1.twinx()
+
+    ax1.plot(indices, validation_accuracies, '-', color=(139/255, 0, 0))
+    ax1.set_xlabel('Epoch')
+    ax1.set_ylabel('Validation accuracy', color=(139/255, 0, 0))
+    ax1.tick_params('y', colors=(139/255, 0, 0))
+
+    ax2.plot(indices, training_loss, '-', color=(0, 0, 139/255))
+    ax2.set_ylabel('Training loss', color=(0, 0, 139/255))
+    ax2.tick_params('y', colors=(0, 0, 139/255))
+
+    plt.title('Training loss and validation accuracy as training progresses')
+    plt.figtext(0.5, 0.01, "Model hyperparamters: Single hidden layer with {} "
+                           "neurons; "
+                "Optimization hyperparamters: lr {}, lamb {}".
+                format(k, lr, lamb), ha="center", color='grey')
+    print("Test accuracy: {}".format(evaluate(model, zero_train_matrix,
+                                              test_data)))
+    plt.show()
+
+
+def tune_lamb(k, lr, num_epoch):
+    """
+    Tune the weight regularization parameter lambda among a range of values.
+    Plot the validation curves for different lambdas in a graph.
+    """
+    zero_train_matrix, train_matrix, valid_data, test_data = load_data()
+    indices = [i for i in range(num_epoch)]
+    for lamb in [0.001, 0.01, 0.1, 1]:
+        model = AutoEncoder(1774, k)
+        _, validation_accuracies = \
+            train(model, lr, lamb, train_matrix, zero_train_matrix, valid_data,
+                  num_epoch)
+        plt.scatter(indices, validation_accuracies, alpha=0.7, label="lamb={}".
+                    format(lamb))
+    plt.xlabel("Epoch")
+    plt.ylabel("Validation accuracy")
+    plt.legend(loc="lower right")
+    plt.title("Weight regularization tuning for optimal neural network.")
+    plt.show()
 
 
 if __name__ == "__main__":
     main()
+    plot_and_report(50, 0.001, 0.01, 200)
+    tune_lamb(50, 0.01, 50)
