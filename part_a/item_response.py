@@ -21,6 +21,14 @@ def neg_log_likelihood(data, theta, beta):
     :return: float
     """
     log_lklihood = 0.
+    # for index, t in enumerate(theta):
+    #     log_lklihood += \
+    #         sum([(data["is_correct"][j] *
+    #               np.log(sigmoid(t - beta[data["question_id"][j]])) +
+    #               (1 - data["is_correct"][j]) *
+    #               np.log(1 - sigmoid(t - beta[data["question_id"][j]])))
+    #              if data["user_id"][j] == index else 0 for j in
+    #              range(len(data["user_id"]))])
     for i in range(theta.shape[0]):
         indices_j = [j for j in range(len(data["user_id"])) if data["user_id"][j] == i]
         log_lklihood += sum([(data["is_correct"][j] * np.log(sigmoid(theta[i] - beta[data["question_id"][j]]))
@@ -48,7 +56,6 @@ def update_theta_beta(data, lr, theta, beta):
     grad_theta = []
     for i in range(theta.shape[0]):
         indices_j = [j for j in range(len(data["user_id"])) if data["user_id"][j] == i]
-        # question_ids = [data["question_id"][j] for j in indices_j]
         s = sum([(data["is_correct"][j] - sigmoid(theta[i] - beta[data["question_id"][j]])) for j in indices_j])
         grad_theta.append(s)
     grad_theta = np.array(grad_theta)
@@ -62,12 +69,6 @@ def update_theta_beta(data, lr, theta, beta):
     grad_beta = np.array(grad_beta)
     beta += lr * grad_beta
 
-    #####################################################################
-    # Implement the function as described in the docstring.             #
-    #####################################################################
-    #####################################################################
-    #                       END OF YOUR CODE                            #
-    #####################################################################
     return theta, beta
 
 
@@ -128,6 +129,11 @@ def evaluate(data, theta, beta):
 
 
 def main():
+    """
+    Train the IRT on the data and plot the training and validation negative log-
+    likelihoods, validation accuracies, and report the final test and validation
+    accuracy. Return the trained parameters beta and theta.
+    """
     train_data = load_train_csv("../data")
     # You may optionally use the sparse matrix.
     sparse_matrix = load_train_sparse("../data")
@@ -140,43 +146,75 @@ def main():
 
     t, b, tnllk, vnllk, vscore = irt(train_data, val_data, lr, ite)
 
-
-    plt.scatter(y=tnllk, x=iterations, label="Training neg-log-llh")
-    plt.scatter(y=vnllk, x=iterations, label="Validation neg-log-llh")
-    plt.xlabel("Number of Iterations")
-    plt.ylabel("Negative log-likelihood")
-    plt.title("Training and Validation Negative Log-Likelihood Curves for "
-              "learning rate {}".format(lr))
-    plt.legend(loc="upper right")
-    plt.show()
-
-    plt.scatter(y=vscore, x=iterations)
-    plt.ylabel("Validation score")
-    plt.xlabel("Number of Iterations")
-    plt.title("Validation Score Curve for learning rate {}".format(lr))
-    plt.show()
-
-
-    #####################################################################
-    # Tune learning rate and number of iterations. With the implemented #
-    # code, report the validation and test accuracy.                    #
-    #####################################################################
     test_acc = evaluate(test_data, t, b)
     val_acc = evaluate(val_data, t, b)
     print("Final test accuracy: {}".format(test_acc))
     print("Final validation accuracy: {}".format(val_acc))
-    #####################################################################
-    #                       END OF YOUR CODE                            #
-    #####################################################################
 
-    #####################################################################
+    fig, ax1 = plt.subplots()
+    ax2 = ax1.twinx()
 
-    #####################################################################
+    ax1.plot(iterations, tnllk, '-', color=(158/250, 24/250, 196/250), alpha=0.7)
+    ax1.set_xlabel('Iteration')
+    ax1.set_ylabel('Training negative log-likelihood', color=(158/250, 24/250,
+                                                              196/250))
+    ax1.tick_params('y', colors=(158/250, 24/250, 196/250))
 
-    #####################################################################
-    #                       END OF YOUR CODE                            #
-    #####################################################################
+    ax2.plot(iterations, vnllk, '-', color=(0/250, 139/250, 0/250), alpha=0.7)
+    ax2.set_ylabel('Validation negative log-likelihood', color=(0/250, 139/250,
+                                                                0/250))
+    ax2.tick_params('y', colors=(0/250, 139/250, 0/250))
+    ax1.set_ylim(min(tnllk), max(tnllk) + 1000)
+    plt.title("Training and Validation negative log-likelihoods progression")
+    plt.figtext(0.45, 0.001, "Learning rate: {}".format(lr), color="grey")
+    plt.show()
+
+    plt.scatter(y=vscore, x=iterations, color=(0/250, 139/250, 0/250))
+    plt.ylabel("Validation score")
+    plt.xlabel("Iterations")
+    plt.title("Validation accuracy progression".format(lr))
+    plt.figtext(0.45, 0.01, "Learning rate: {}".format(lr), color="grey")
+    plt.show()
+
+    return b, t
+
+
+def plot_pcij(beta, theta, js):
+    """
+    Plot the probability of getting the given questions in <js> right against
+    students and against students abilities. Use the beta and theta in we
+    trained.
+
+    @param beta: vector
+    @param theta: vector
+    @js: a list of questions of interest
+    """
+    students = [i for i in range(542)]
+    x = np.linspace(-5, 5, 100)
+    for ji in js:
+        beta_ji = beta[ji]
+        probability = np.exp(theta - beta_ji) / (1 + np.exp(theta - beta_ji))
+        plt.scatter(np.array(students), probability, alpha=0.7,
+                    label="{}-th question with difficulty {}".format(ji,
+                                                                     round(beta_ji, 3)))
+    plt.xlabel("Student number")
+    plt.ylabel("Probability")
+    plt.title("Probabilities of getting the given questions right against students")
+    plt.legend()
+    plt.show()
+    for ji in js:
+        beta_ji = beta[ji]
+        probability = np.exp(x - beta_ji) / (1 + np.exp(x - beta_ji))
+        plt.scatter(x, probability, alpha=0.7,
+                    label="{}-th question with difficulty {}".format(ji,
+                                                                     round(beta_ji, 3)))
+    plt.xlabel("Student ability theta")
+    plt.ylabel("Probability")
+    plt.title("Probabilities of getting the given questions right against students ability")
+    plt.legend(loc="lower right")
+    plt.show()
 
 
 if __name__ == "__main__":
-    main()
+    b, t = main()
+    plot_pcij(b, t, [34, 855, 1773])
