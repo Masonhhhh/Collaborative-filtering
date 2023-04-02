@@ -1,5 +1,4 @@
 # DONE: complete this file.
-from utils import *
 from part_a.item_response import *
 
 

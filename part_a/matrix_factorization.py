@@ -1,4 +1,4 @@
-from utils import *
+from part_a.utils import *
 from scipy.linalg import sqrtm
 
 import numpy as np
@@ -87,7 +87,7 @@ def update_u_z(train_data, lr, u, z):
 
 
 def als(train_data, k, lr, num_iteration):
-    """ Performs ALS algorithm, here we use the iterative solution - SGD 
+    """ Performs ALS algorithm, here we use the iterative solution - SGD
     rather than the direct solution.
 
     :param train_data: A dictionary {user_id: list, question_id: list,
